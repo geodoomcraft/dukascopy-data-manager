@@ -51,7 +51,7 @@ def download(assets:Annotated[list[str], typer.Argument(help="Give a list of ass
 
 def download_file_parallel(file_url_zip, asset:str, length:int, processes_num=os.cpu_count()):
     with Pool(processes=processes_num) as pool:
-        for i in track(pool.imap_unordered(download_file, file_url_zip), total=length, description=f"Downloading {asset}..."):
+        for _ in track(pool.imap_unordered(download_file, file_url_zip), total=length, description=f"Downloading {asset}..."):
             pass
 
 def download_file(args):

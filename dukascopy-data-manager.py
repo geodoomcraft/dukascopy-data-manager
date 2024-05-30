@@ -2,10 +2,9 @@ import typer
 from typing_extensions import Annotated
 from rich.progress import track
 import requests
-from multiprocessing import Pool
+import concurrent.futures
 from pathlib import Path
 from datetime import datetime, timedelta
-import os
 
 app = typer.Typer()
 
@@ -13,19 +12,19 @@ app = typer.Typer()
 def download(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to download. Eg. EURUSD AUDUSD")],
              start:Annotated[str, typer.Argument(help="Start date to download in YYYY-MM-DD format. Eg. 2024-01-08")],
              end:Annotated[str, typer.Option(help="End date to download in YYYY-MM-DD format. If not provided, will download until current date Eg. 2024-01-08")]="",
-             concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (automatically limited by available threads)")]=0,
+             concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (defaults to max number of threads + 4 or 32 (which ever is less)) (Sometimes using too high of a number results in missing files)")]=0,
              force:Annotated[bool, typer.Option(help="Redownload files. By default, without this flag, files that already exist will be skipped")]=False):
     start_date_str = start.split("-")
     end_date = datetime.today()
+    base_url = "https://datafeed.dukascopy.com/datafeed/"
 
     if end != "":
         end_date = end.split("-")
         end_date = datetime(int(end_date[0]), int(end_date[1]), int(end_date[2]))
 
-    processes = os.cpu_count()
-    if concurrent > 0 and processes != None:
-        if concurrent < processes:
-            processes = concurrent
+    processes = None
+    if concurrent > 0:
+        processes = concurrent
 
     delta = timedelta(hours=1)
     for asset in assets:
@@ -41,7 +40,7 @@ def download(assets:Annotated[list[str], typer.Argument(help="Give a list of ass
             hour = start_date.hour
 
             filenames.append(Path(f"./download/{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5"))
-            urls.append(f"https://datafeed.dukascopy.com/datafeed/{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5")
+            urls.append(f"{base_url}{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5")
             forces.append(force)
 
             start_date += delta
@@ -49,9 +48,11 @@ def download(assets:Annotated[list[str], typer.Argument(help="Give a list of ass
         download_file_parallel(inputs, asset, len(filenames), processes)
     print("Download completed")
 
-def download_file_parallel(file_url_zip, asset:str, length:int, processes_num=os.cpu_count()):
-    with Pool(processes=processes_num) as pool:
-        for _ in track(pool.imap_unordered(download_file, file_url_zip), total=length, description=f"Downloading {asset}..."):
+def download_file_parallel(file_url_zip, asset:str, length:int, processes_num=None):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=processes_num) as executor:
+        args_list = tuple(file_url_zip)
+        results = [executor.submit(download_file, args) for args in args_list]
+        for _ in track(concurrent.futures.as_completed(results), total=length, description=f"Downloading {asset}..."):
             pass
 
 def download_file(args):

@@ -79,12 +79,16 @@ def download_file(args):
         f.write(r.content)
 
 @app.command()
-def export(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to export. Eg. EURUSD AUDUSD")],
+def export(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to export. Use 'all' for all downloaded assets. Eg. EURUSD AUDUSD. Check export --help for more info")],
            timeframe:Annotated[str, typer.Argument(help="Timeframe to export. Format should be [Number][Unit] eg. 1h or 1t. Check export --help for more info about units.")],
            start:Annotated[str, typer.Argument(help="Start date to export in YYYY-MM-DD format. Eg. 2024-01-08")],
            end:Annotated[str, typer.Option(help="End date to export in YYYY-MM-DD format. If not provided, will export until current date Eg. 2024-01-08")]=""):
     """
-    Export downloaded data into different timeframes/units\n
+    Export downloaded data into different timeframes/units.\n
+    assets can be selected by listing multiple with a space dividing them or a single asset.\n
+    Eg. export AUDUSD EURUSD\n
+    Can also use all to select all downloaded assets.
+    Eg. export all
     Available units:\n
         t: ticks (eg. 1t)\n
         s: seconds (eg. 10s)\n
@@ -93,6 +97,15 @@ def export(assets:Annotated[list[str], typer.Argument(help="Give a list of asset
         D: days (eg. 2D)\n
         W: weeks (eg. 2W)\n
     """
+    asset_list = []
+    if assets[0] == "all":
+        dirs = Path(DOWNLOAD_PATH).glob("*")
+        for dir in dirs:
+            parts = dir.parts
+            asset_list.append(parts[1])
+    else:
+        asset_list = assets
+
     start_date_str = start.split("-")
     end_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
 
@@ -101,7 +114,7 @@ def export(assets:Annotated[list[str], typer.Argument(help="Give a list of asset
         end_date = datetime(int(end_date[0]), int(end_date[1]), int(end_date[2]))
 
     delta = timedelta(hours=1)
-    for asset in assets:
+    for asset in asset_list:
         filenames = []
         file_times = []
 

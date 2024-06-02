@@ -204,14 +204,10 @@ def aggregate_data(df:pd.DataFrame, tf:str):
 
 @app.command("list")
 def list_command():
-    dirs = Path(DOWNLOAD_PATH).glob("*/*/*/*")
-    assets = {}
-    for dir in dirs:
-        parts = dir.parts
-        asset = parts[1]
-        if asset not in assets:
-            assets[asset] = []
-        assets[asset].append(datetime(int(parts[2]), int(parts[3])+1, int(parts[4])))
+    """
+    List all downloaded assets
+    """
+    assets = grab_asset_dirs()
 
     table = Table(title="Downloaded Data")
 
@@ -224,6 +220,36 @@ def list_command():
 
     console = Console()
     console.print(table)
+
+@app.command()
+def update(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to update. Use 'all' for all downloaded assets. Eg. EURUSD AUDUSD. Check update --help for more info")],
+           concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (defaults to max number of threads + 4 or 32 (which ever is less)) (Sometimes using too high of a number results in missing files)")]=0):
+    """
+    Update downloaded assets to latest date.\n
+    assets can be selected by listing multiple with a space dividing them or a single asset.\n
+    Eg. export AUDUSD EURUSD\n
+    Can also use all to select all downloaded assets.\n
+    Eg. export all\n
+    """
+    assets_dict = grab_asset_dirs()
+    if assets[0] == "all":
+        for asset in assets_dict:
+            download([asset], max(assets_dict[asset]).strftime("%Y-%m-%d"), concurrent=concurrent)
+        return
+    for asset in assets:
+        download([asset], max(assets_dict[asset]).strftime("%Y-%m-%d"), concurrent=concurrent)
+
+
+def grab_asset_dirs():
+    dirs = Path(DOWNLOAD_PATH).glob("*/*/*/*")
+    assets = {}
+    for dir in dirs:
+        parts = dir.parts
+        asset = parts[1]
+        if asset not in assets:
+            assets[asset] = []
+        assets[asset].append(datetime(int(parts[2]), int(parts[3])+1, int(parts[4])))
+    return assets
 
 if __name__ == "__main__":
     app()

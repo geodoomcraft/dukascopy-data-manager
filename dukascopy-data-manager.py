@@ -87,8 +87,8 @@ def export(assets:Annotated[list[str], typer.Argument(help="Give a list of asset
     Export downloaded data into different timeframes/units.\n
     assets can be selected by listing multiple with a space dividing them or a single asset.\n
     Eg. export AUDUSD EURUSD\n
-    Can also use all to select all downloaded assets.
-    Eg. export all
+    Can also use all to select all downloaded assets.\n
+    Eg. export all\n
     Available units:\n
         t: ticks (eg. 1t)\n
         s: seconds (eg. 10s)\n

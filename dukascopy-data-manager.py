@@ -4,7 +4,7 @@ from rich.progress import track
 import requests
 import concurrent.futures
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 app = typer.Typer()
 
@@ -15,7 +15,7 @@ def download(assets:Annotated[list[str], typer.Argument(help="Give a list of ass
              concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (defaults to max number of threads + 4 or 32 (which ever is less)) (Sometimes using too high of a number results in missing files)")]=0,
              force:Annotated[bool, typer.Option(help="Redownload files. By default, without this flag, files that already exist will be skipped")]=False):
     start_date_str = start.split("-")
-    end_date = datetime.today()
+    end_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
     base_url = "https://datafeed.dukascopy.com/datafeed/"
 
     if end != "":
@@ -63,6 +63,7 @@ def download_file(args):
 
     r = requests.get(url)
     if not r:
+        print(f"Error: {r} for {url}")
         return
 
     filename.parent.mkdir(exist_ok=True, parents=True)
@@ -74,9 +75,9 @@ def download_file(args):
 def export():
     pass
 
-@app.command()
-def list():
-    pass
+@app.command("list")
+def list_command():
+    print("hello")
 
 if __name__ == "__main__":
     app()

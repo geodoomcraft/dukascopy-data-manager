@@ -220,6 +220,7 @@ def list_command():
 
     console = Console()
     console.print(table)
+    console.print(f"Total Number of Assets: {len(assets)}")
 
 @app.command()
 def update(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to update. Use 'all' for all downloaded assets. Eg. EURUSD AUDUSD. Check update --help for more info")],

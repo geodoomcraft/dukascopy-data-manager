@@ -142,11 +142,12 @@ def export(assets:Annotated[list[str], typer.Argument(help="Give a list of asset
         df["BIDP"] = df["BIDP"] / 100_000
 
         console = Console()
-        with console.status(f"Aggregating {asset} data..."):
+        with console.status(f"Aggregating {asset} data...") as status:
             agg_df = aggregate_data(df, timeframe)
             console.print(f"{asset} data aggregated")
 
-        with console.status(f"Exporting {asset} to file..."):
+            status.update(f"Exporting {asset} to file...")
+
             export_file = Path(f"{EXPORT_PATH}{asset}.csv")
             export_file.parent.mkdir(exist_ok=True, parents=True)
             agg_df.to_csv(export_file, index=False)

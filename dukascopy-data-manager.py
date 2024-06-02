@@ -7,9 +7,13 @@ import requests
 import concurrent.futures
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+import lzma
+import numpy as np
+import pandas as pd
 
 app = typer.Typer()
 DOWNLOAD_PATH = "./download/"
+EXPORT_PATH = "./export/"
 
 @app.command()
 def download(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to download. Eg. EURUSD AUDUSD")],
@@ -75,8 +79,111 @@ def download_file(args):
         f.write(r.content)
 
 @app.command()
-def export():
-    pass
+def export(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to export. Eg. EURUSD AUDUSD")],
+           timeframe:Annotated[str, typer.Argument(help="Timeframe to export. Format should be [Number][Unit] eg. 1h or 1t. Check export --help for more info about units.")],
+           start:Annotated[str, typer.Argument(help="Start date to export in YYYY-MM-DD format. Eg. 2024-01-08")],
+           end:Annotated[str, typer.Option(help="End date to export in YYYY-MM-DD format. If not provided, will export until current date Eg. 2024-01-08")]=""):
+    """
+    Export downloaded data into different timeframes/units\n
+    Available units:\n
+        t: ticks (eg. 1t)\n
+        s: seconds (eg. 10s)\n
+        m: minutes (eg. 15m)\n
+        h: hours (eg. 4h)\n
+        D: days (eg. 2D)\n
+        W: weeks (eg. 2W)\n
+    """
+    start_date_str = start.split("-")
+    end_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+
+    if end != "":
+        end_date = end.split("-")
+        end_date = datetime(int(end_date[0]), int(end_date[1]), int(end_date[2]))
+
+    delta = timedelta(hours=1)
+    for asset in assets:
+        filenames = []
+        file_times = []
+
+        start_date = datetime(int(start_date_str[0]), int(start_date_str[1]), int(start_date_str[2]))
+        while start_date <= end_date:
+            year = start_date.year
+            month = start_date.month-1
+            day = start_date.day
+            hour = start_date.hour
+
+            filenames.append(Path(f"{DOWNLOAD_PATH}{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5"))
+            file_times.append(datetime(year, month+1, day, hour))
+
+            start_date += delta
+
+        df_list = []
+        
+        for i in track(range(len(filenames)), description=f"Reading {asset} tick files..."):
+            file = filenames[i]
+            if not file.is_file():
+                print(f"{file} is missing, skipping this file.")
+                continue
+            if file.stat().st_size == 0:
+                continue
+            dt = np.dtype([('TIME', '>i4'), ('ASKP', '>i4'), ('BIDP', '>i4'), ('ASKV', '>f4'), ('BIDV', '>f4')])
+            data = np.frombuffer(lzma.open(file, mode="rb").read(),dt)
+            df = pd.DataFrame(data)
+            df["TIME"] = pd.to_datetime(df["TIME"], unit="ms", origin=file_times[i])
+            df_list.append(df)
+
+        df = pd.concat(df_list, ignore_index=True)
+        df["ASKP"] = df["ASKP"].astype(np.int32)
+        df["BIDP"] = df["BIDP"].astype(np.int32)
+        df["ASKV"] = df["ASKV"].astype(np.float32)
+        df["BIDV"] = df["BIDV"].astype(np.float32)
+
+        df["ASKP"] = df["ASKP"] / 100_000
+        df["BIDP"] = df["BIDP"] / 100_000
+
+        console = Console()
+        with console.status(f"Aggregating {asset} data..."):
+            agg_df = aggregate_data(df, timeframe)
+            console.print(f"{asset} data aggregated")
+
+        with console.status(f"Exporting {asset} to file..."):
+            export_file = Path(f"{EXPORT_PATH}{asset}.csv")
+            export_file.parent.mkdir(exist_ok=True, parents=True)
+            agg_df.to_csv(export_file, index=False)
+            console.print(f"{asset} exported to {export_file}")
+
+    print(f"Export completed. Data located at {Path(EXPORT_PATH).resolve()}")
+
+def aggregate_data(df:pd.DataFrame, tf:str):
+    if "t" in tf:
+        tick_num = int(tf.split("t")[0])
+        if tick_num == 1:
+            return df
+        df_group = df.groupby(df.index // tick_num)
+        agg_df = pd.DataFrame()
+        agg_df["date"] = df_group["TIME"].first()
+        agg_df["open"] = df_group["BIDP"].first()
+        agg_df["high"] = df_group["BIDP"].max()
+        agg_df["low"] = df_group["BIDP"].min()
+        agg_df["close"] = df_group["BIDP"].last()
+        agg_df["vol"] = df_group["BIDV"].sum()
+        return agg_df
+
+    agg_time = pd.Timedelta(tf)
+
+    df = df.set_index("TIME")
+    df_group = df.resample(agg_time)
+
+    agg_df = pd.DataFrame()
+    agg_df["open"] = df_group["BIDP"].first()
+    agg_df["high"] = df_group["BIDP"].max()
+    agg_df["low"] = df_group["BIDP"].min()
+    agg_df["close"] = df_group["BIDP"].last()
+    agg_df["vol"] = df_group["BIDV"].sum()
+    agg_df = agg_df.reset_index(names="date")
+
+    agg_df = agg_df.dropna()
+    return agg_df
 
 @app.command("list")
 def list_command():

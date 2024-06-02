@@ -1,12 +1,15 @@
 import typer
 from typing_extensions import Annotated
 from rich.progress import track
+from rich.console import Console
+from rich.table import Table
 import requests
 import concurrent.futures
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 app = typer.Typer()
+DOWNLOAD_PATH = "./download/"
 
 @app.command()
 def download(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to download. Eg. EURUSD AUDUSD")],
@@ -39,7 +42,7 @@ def download(assets:Annotated[list[str], typer.Argument(help="Give a list of ass
             day = start_date.day
             hour = start_date.hour
 
-            filenames.append(Path(f"./download/{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5"))
+            filenames.append(Path(f"{DOWNLOAD_PATH}{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5"))
             urls.append(f"{base_url}{asset}/{year}/{month:0>2}/{day:0>2}/{hour:0>2}h_ticks.bi5")
             forces.append(force)
 
@@ -77,7 +80,26 @@ def export():
 
 @app.command("list")
 def list_command():
-    print("hello")
+    dirs = Path(DOWNLOAD_PATH).glob("*/*/*/*")
+    assets = {}
+    for dir in dirs:
+        parts = dir.parts
+        asset = parts[1]
+        if asset not in assets:
+            assets[asset] = []
+        assets[asset].append(datetime(int(parts[2]), int(parts[3])+1, int(parts[4])))
+
+    table = Table(title="Downloaded Data")
+
+    table.add_column("Asset")
+    table.add_column("Start Date (YYYY-MM-DD)")
+    table.add_column("End Date (YYYY-MM-DD)")
+
+    for asset in assets:
+        table.add_row(asset, min(assets[asset]).strftime("%Y-%m-%d"), max(assets[asset]).strftime("%Y-%m-%d"))
+
+    console = Console()
+    console.print(table)
 
 if __name__ == "__main__":
     app()

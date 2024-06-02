@@ -21,6 +21,9 @@ def download(assets:Annotated[list[str], typer.Argument(help="Give a list of ass
              end:Annotated[str, typer.Option(help="End date to download in YYYY-MM-DD format. If not provided, will download until current date Eg. 2024-01-08")]="",
              concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (defaults to max number of threads + 4 or 32 (which ever is less)) (Sometimes using too high of a number results in missing files)")]=0,
              force:Annotated[bool, typer.Option(help="Redownload files. By default, without this flag, files that already exist will be skipped")]=False):
+    """
+    Download assets
+    """
     start_date_str = start.split("-")
     end_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
     base_url = "https://datafeed.dukascopy.com/datafeed/"

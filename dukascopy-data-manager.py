@@ -224,7 +224,9 @@ def list_command():
 
 @app.command()
 def update(assets:Annotated[list[str], typer.Argument(help="Give a list of assets to update. Use 'all' for all downloaded assets. Eg. EURUSD AUDUSD. Check update --help for more info")],
-           concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (defaults to max number of threads + 4 or 32 (which ever is less)) (Sometimes using too high of a number results in missing files)")]=0):
+           start:Annotated[str, typer.Option(help="Start date to update from in YYYY-MM-DD format. This overrides the default which uses the latest downloaded file as the start date. Eg. 2024-01-08")]="",
+           concurrent:Annotated[int, typer.Option(help="Max number of concurrent downloads (defaults to max number of threads + 4 or 32 (which ever is less)) (Sometimes using too high of a number results in missing files)")]=0,
+           force:Annotated[bool, typer.Option(help="Redownload files. By default, without this flag, files that already exist will be skipped. This can be used with --start to force redownload.")]=False):
     """
     Update downloaded assets to latest date.\n
     assets can be selected by listing multiple with a space dividing them or a single asset.\n
@@ -233,12 +235,21 @@ def update(assets:Annotated[list[str], typer.Argument(help="Give a list of asset
     Eg. export all\n
     """
     assets_dict = grab_asset_dirs()
-    if assets[0] == "all":
-        for asset in assets_dict:
-            download([asset], max(assets_dict[asset]).strftime("%Y-%m-%d"), concurrent=concurrent)
+    if assets[0] != "all":
+        for asset in assets:
+            start_date = max(assets_dict[asset])
+            if start != "":
+                start_split = start.split("-")
+                start_date = datetime(int(start_split[0]), int(start_split[1]), int(start_split[2]))
+            download([asset], start_date.strftime("%Y-%m-%d"), concurrent=concurrent, force=force)
         return
-    for asset in assets:
-        download([asset], max(assets_dict[asset]).strftime("%Y-%m-%d"), concurrent=concurrent)
+
+    for asset in assets_dict:
+        start_date = max(assets_dict[asset])
+        if start != "":
+            start_split = start.split("-")
+            start_date = datetime(int(start_split[0]), int(start_split[1]), int(start_split[2]))
+        download([asset], start_date.strftime("%Y-%m-%d"), concurrent=concurrent, force=force)
 
 
 def grab_asset_dirs():
